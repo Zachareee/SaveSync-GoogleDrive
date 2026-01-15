@@ -11,9 +11,8 @@ struct Info {
 };
 
 struct FileDetails {
-	char *tag;
 	char *filename;
-	unsigned long long timestamp;
+	unsigned long long dateModified;
 };
 */
 import "C"
@@ -24,6 +23,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"net/url"
+	"runtime"
 	"time"
 	"unsafe"
 
@@ -43,8 +43,12 @@ import (
 type CStr = *C.char
 
 var ctx = context.Background()
+var pinner runtime.Pinner
 
-const data = `{"installed":{"client_id":"487698375903-j8s33ij1pc335jc2pu6d2rb1bgrg2fqo.apps.googleusercontent.com","project_id":"savesync-450104","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["http://localhost"]}}`
+const (
+	savesyncFolderName = "SaveSync"
+	data               = `{"installed":{"client_id":"487698375903-j8s33ij1pc335jc2pu6d2rb1bgrg2fqo.apps.googleusercontent.com","project_id":"savesync-450104","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["http://localhost"]}}`
+)
 
 func getConfig() *oauth2.Config {
 	config, err := google.ConfigFromJSON([]byte(data), drive.DriveFileScope)
@@ -148,26 +152,89 @@ func getFileService(access_token []byte) (*drive.FilesService, error) {
 }
 
 //export read_cloud
-func read_cloud() (uint64, *C.struct_FileDetails) {
-	return 0, nil
+func read_cloud(accessToken CStr) (uint64, *C.struct_FileDetails, CStr) {
+	fileService, err := getFileService([]byte(C.GoString(accessToken)))
+
+	if err != nil {
+		return 0, nil, C.CString(err.Error())
+	}
+
+	homeFolderId, err := homeFolder(fileService)
+
+	if err != nil {
+		return 0, nil, C.CString(err.Error())
+	}
+
+	files, err := fileService.
+		List().
+		Context(ctx).
+		Fields("files(name, modifiedTime)").
+		Q(fmt.Sprintf("'%s' in parents", homeFolderId)).
+		Do()
+
+	if err != nil {
+		return 0, nil, C.CString(err.Error())
+	}
+
+	n := uint64(len(files.Files))
+
+	fileDetailsSlice := make([]C.struct_FileDetails, n)
+
+	for i, f := range files.Files {
+		modifiedDate, err := time.Parse(time.RFC3339, f.ModifiedTime)
+
+		if err != nil {
+			return 0, nil, C.CString(err.Error())
+		}
+
+		fileDetailsSlice[i] = C.struct_FileDetails{
+			filename:     C.CString(f.Name),
+			dateModified: C.ulonglong(modifiedDate.Unix()),
+		}
+	}
+
+	detailsPtr := unsafe.SliceData(fileDetailsSlice)
+	pinner.Pin(detailsPtr)
+
+	return n, detailsPtr, nil
+}
+
+func homeFolder(fileService *drive.FilesService) (string, error) {
+	files, err := fileService.List().
+		Context(ctx).
+		Fields("files(id)").
+		Q(fmt.Sprintf("name = '%s'", savesyncFolderName)).
+		Do()
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(files.Files) != 0 {
+		return files.Files[0].Id, nil
+	}
+
+	folder, err := fileService.
+		Create(&drive.File{Name: savesyncFolderName, MimeType: "application/vnd.google-apps.folder"}).
+		Context(ctx).
+		Do()
+
+	if err != nil {
+		return "", err
+	}
+
+	return folder.Id, nil
 }
 
 //export upload
-func upload(access_token, tag, filename CStr, date_modified uint64, data CStr, data_length uint64) CStr {
+func upload(access_token, filename CStr, date_modified uint64, data CStr, data_length uint64) CStr {
 	files, err := getFileService([]byte(C.GoString(access_token)))
 
 	if err != nil {
 		return C.CString(err.Error())
 	}
 
-	tagstring := C.GoString(tag)
-	savesync_folder, err := files.Create(&drive.File{Name: "SaveSync", MimeType: "application/vnd.google-apps.folder"}).Context(ctx).Do()
-
-	if err != nil {
-		return C.CString(err.Error())
-	}
-
-	folder, err := files.Create(&drive.File{Name: tagstring, MimeType: "application/vnd.google-apps.folder", Parents: []string{savesync_folder.Id}}).Context(ctx).Do()
+	folder_id, err := homeFolder(files)
 
 	if err != nil {
 		return C.CString(err.Error())
@@ -179,7 +246,7 @@ func upload(access_token, tag, filename CStr, date_modified uint64, data CStr, d
 		Create(&drive.File{
 			Name:         C.GoString(filename),
 			ModifiedTime: time.Unix(int64(date_modified), 0).Format(time.RFC3339),
-			Parents:      []string{folder.Id},
+			Parents:      []string{folder_id},
 		}).
 		Context(ctx).
 		Media(bytes.NewReader(byteslice)).
@@ -188,6 +255,7 @@ func upload(access_token, tag, filename CStr, date_modified uint64, data CStr, d
 	if err != nil {
 		return C.CString(err.Error())
 	}
+
 	return nil
 }
 
@@ -197,6 +265,11 @@ func download(tag, filename CStr) {}
 //export free_memory
 func free_memory(str *C.char) {
 	C.free(unsafe.Pointer(str))
+}
+
+//export close_dll
+func close_dll() {
+	pinner.Unpin()
 }
 
 //	func main() {
