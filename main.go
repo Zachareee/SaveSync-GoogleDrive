@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"io"
 	"net/url"
 	"runtime"
 	"time"
@@ -36,8 +37,6 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
-	// "google.golang.org/api/googleapi"
-	// "google.golang.org/api/option"
 )
 
 type CStr = *C.char
@@ -260,7 +259,53 @@ func upload(access_token, filename CStr, date_modified uint64, data CStr, data_l
 }
 
 //export download
-func download(tag, filename CStr) {}
+func download(accessToken, filename CStr) (unsafe.Pointer, uint64, CStr) {
+	fileService, err := getFileService([]byte(C.GoString(accessToken)))
+
+	if err != nil {
+		return nil, 0, C.CString(err.Error())
+	}
+
+	home, err := homeFolder(fileService)
+
+	if err != nil {
+		return nil, 0, C.CString(err.Error())
+	}
+
+	f := C.GoString(filename)
+
+	files, err := fileService.List().
+		Context(ctx).
+		Fields("files(id)").
+		Q(fmt.Sprintf("name = '%s' and '%s' in parents", f, home)).
+		Do()
+
+	if err != nil {
+		return nil, 0, C.CString(err.Error())
+	}
+
+	if len(files.Files) == 0 {
+		return nil, 0, C.CString(fmt.Sprintf("File not found: %s", f))
+	}
+
+	file := files.Files[0].Id
+
+	resp, err := fileService.Get(file).Download()
+
+	if err != nil {
+		return nil, 0, C.CString(err.Error())
+	}
+
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, 0, C.CString(err.Error())
+	}
+
+	return C.CBytes(data), uint64(len(data)), nil
+}
 
 //export free_memory
 func free_memory(str *C.char) {
@@ -272,37 +317,4 @@ func close_dll() {
 	pinner.Unpin()
 }
 
-//	func main() {
-//		client := getClient(getConfig())
-//
-//		srv, err := drive.NewService(ctx, option.WithHTTPClient(client))
-//
-//		if err != nil {
-//			log.Fatalf("Unable to retrieve Drive client: %v", err)
-//		}
-//
-//		f, err := srv.Files.Create(&drive.File{Name: "SaveSync", MimeType: "application/vnd.google-apps.folder"}).Do()
-//		//.Media(strings.NewReader("Hello"))
-//
-//		if err != nil {
-//			log.Fatalf("Unable to create folder: %v", err)
-//		}
-//
-//		fmt.Println(f.Id)
-//
-//		r, err := srv.Files.List().PageSize(10).Fields(googleapi.Field("files(id, name)")).Do()
-//
-//		if err != nil {
-//			log.Fatalf("Unable to retrieve files: %v", err)
-//		}
-//
-//		fmt.Println("Files:")
-//		if len(r.Files) == 0 {
-//			fmt.Println("No files found.")
-//		} else {
-//			for _, i := range r.Files {
-//				fmt.Printf("%s (%s)\n", i.Name, i.Id)
-//			}
-//		}
-//	}
 func main() {}
