@@ -62,11 +62,11 @@ func extract_credentials(uri CStr) (CStr, CStr) {
 }
 
 //export read_cloud
-func read_cloud(accessToken CStr) (uint64, *C.struct_FileDetails, CStr) {
+func read_cloud(accessToken CStr) (*C.struct_FileDetails, uint64, CStr) {
 	details, err := pkg.Read_cloud(C.GoString(accessToken))
 
 	if err != nil {
-		return 0, nil, C.CString(err.Error())
+		return nil, 0, C.CString(err.Error())
 	}
 
 	n := uint64(len(details))
@@ -83,7 +83,7 @@ func read_cloud(accessToken CStr) (uint64, *C.struct_FileDetails, CStr) {
 	detailsPtr := unsafe.SliceData(fileDetailsSlice)
 	pinner.Pin(detailsPtr)
 
-	return uint64(len(details)), (*C.struct_FileDetails)(detailsPtr), nil
+	return (*C.struct_FileDetails)(detailsPtr), uint64(len(details)), nil
 }
 
 //export upload
@@ -108,13 +108,21 @@ func download(accessToken, filename CStr) (unsafe.Pointer, uint64, CStr) {
 	return C.CBytes(data), uint64(len(data)), nil
 }
 
-//export free_memory
-func free_memory(str *C.char) {
+//export free_info
+func free_info(info C.struct_Info) {
+	free_string(info.name)
+	free_string(info.description)
+	free_string(info.author)
+	free_string(info.icon_url)
+}
+
+//export free_string
+func free_string(str CStr) {
 	C.free(unsafe.Pointer(str))
 }
 
-//export close_dll
-func close_dll() {
+//export free_file_details
+func free_file_details(uint64, *C.struct_FileDetails) {
 	pinner.Unpin()
 }
 
