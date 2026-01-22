@@ -89,7 +89,7 @@ func Read_cloud(accessToken string) ([]FileDetails, error) {
 		List().
 		Context(CTX).
 		Fields("files(name, modifiedTime)").
-		Q(fmt.Sprintf("'%s' in parents", homeFolderId)).
+		Q(fmt.Sprintf("'%s' in parents and trashed = false", homeFolderId)).
 		Do()
 
 	if err != nil {
@@ -162,7 +162,7 @@ func Download(accessToken, filename string) ([]byte, error) {
 	files, err := fileService.List().
 		Context(CTX).
 		Fields("files(id)").
-		Q(fmt.Sprintf("name = '%s' and '%s' in parents", filename, home)).
+		Q(fmt.Sprintf("name = '%s' and '%s' in parents and trashed = false", filename, home)).
 		Do()
 
 	if err != nil {
