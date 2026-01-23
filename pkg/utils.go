@@ -16,13 +16,13 @@ import (
 	"google.golang.org/api/option"
 )
 
-var CTX = context.Background()
-
 const savesyncFolderName = "SaveSync"
+
+var CTX = context.Background()
 
 type File = drive.File
 
-func GetConfig() *oauth2.Config {
+func getConfig() *oauth2.Config {
 	config, err := google.ConfigFromJSON([]byte(internal.PublicKeys), drive.DriveFileScope)
 
 	if err != nil {
@@ -31,8 +31,8 @@ func GetConfig() *oauth2.Config {
 	return config
 }
 
-func GetClient(config *oauth2.Config, data []byte) *http.Client {
-	token, err := GetToken(data)
+func getClient(config *oauth2.Config, data []byte) *http.Client {
+	token, err := getToken(data)
 
 	if err != nil {
 		log.Fatalf("Unable to parse token: %v", err)
@@ -41,21 +41,21 @@ func GetClient(config *oauth2.Config, data []byte) *http.Client {
 	return config.Client(CTX, &token)
 }
 
-func GetToken(data []byte) (oauth2.Token, error) {
+func getToken(data []byte) (oauth2.Token, error) {
 	var authtoken oauth2.Token
 	err := json.Unmarshal(data, &authtoken)
 
 	return authtoken, err
 }
 
-func CreateAuthCodeURL(redirect_uri string) string {
-	config := GetConfig()
+func createAuthCodeURL(redirect_uri string) string {
+	config := getConfig()
 	config.RedirectURL = redirect_uri
 	return config.AuthCodeURL(rand.Text(), oauth2.AccessTypeOffline)
 }
 
-func GetFileService(access_token []byte) (*drive.FilesService, error) {
-	srv, err := drive.NewService(CTX, option.WithHTTPClient(GetClient(GetConfig(), access_token)))
+func getFileService(access_token []byte) (*drive.FilesService, error) {
+	srv, err := drive.NewService(CTX, option.WithHTTPClient(getClient(getConfig(), access_token)))
 
 	if err != nil {
 		return nil, err
@@ -64,11 +64,11 @@ func GetFileService(access_token []byte) (*drive.FilesService, error) {
 	return srv.Files, nil
 }
 
-func HomeFolder(fileService *drive.FilesService) (string, error) {
+func homeFolder(fileService *drive.FilesService) (string, error) {
 	files, err := fileService.List().
 		Context(CTX).
 		Fields("files(id)").
-		Q(fmt.Sprintf("name = '%s'", savesyncFolderName)).
+		Q(fmt.Sprintf("name = '%s' and mimeType = 'application/vnd.google-apps.folder' and trashed = false", savesyncFolderName)).
 		Do()
 
 	if err != nil {

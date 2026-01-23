@@ -30,12 +30,12 @@ func Info() PluginInfo {
 }
 
 func Validate(credentials, redirect_uri string) (string, error) {
-	url := CreateAuthCodeURL(redirect_uri)
+	url := createAuthCodeURL(redirect_uri)
 	if credentials == "" {
 		return url, errors.New("No credentials provided")
 	}
 
-	token, err := GetToken([]byte(credentials))
+	token, err := getToken([]byte(credentials))
 	switch {
 	case err != nil:
 		return url, err
@@ -58,7 +58,7 @@ func Extract_credentials(uri string) (string, error) {
 		return "", errors.New(errcode)
 	}
 
-	auth, err := GetConfig().Exchange(context.TODO(), queries.Get("code"))
+	auth, err := getConfig().Exchange(context.TODO(), queries.Get("code"))
 	if err != nil {
 		return "", err
 	}
@@ -66,20 +66,20 @@ func Extract_credentials(uri string) (string, error) {
 	data, err := json.Marshal(auth)
 
 	if err != nil {
-		fmt.Printf("Unable to convert token to json %v\n", err)
+		return "", err
 	}
 
 	return string(data), nil
 }
 
 func Read_cloud(accessToken string) ([]FileDetails, error) {
-	fileService, err := GetFileService([]byte(accessToken))
+	fileService, err := getFileService([]byte(accessToken))
 
 	if err != nil {
 		return nil, err
 	}
 
-	homeFolderId, err := HomeFolder(fileService)
+	homeFolderId, err := homeFolder(fileService)
 
 	if err != nil {
 		return nil, err
@@ -117,26 +117,48 @@ func Read_cloud(accessToken string) ([]FileDetails, error) {
 }
 
 func Upload(access_token, filename string, date_modified int64, data []byte) error {
-	files, err := GetFileService([]byte(access_token))
+	fileService, err := getFileService([]byte(access_token))
 
 	if err != nil {
 		return err
 	}
 
-	folder_id, err := HomeFolder(files)
+	folder_id, err := homeFolder(fileService)
 
 	if err != nil {
 		return err
 	}
 
-	_, err = files.
+	files, err := fileService.List().
+		Context(CTX).
+		Fields("files(id, name)").
+		Q(fmt.Sprintf("name = '%s' and '%s' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false", filename, folder_id)).
+		Do()
+
+	if err != nil {
+		return err
+	}
+
+	var modifiedTime = time.Unix(int64(date_modified), 0).Format(time.RFC3339)
+	var reader = bytes.NewReader(data)
+
+	if len(files.Files) != 0 {
+		_, err := fileService.Update(files.Files[0].Id, &File{ModifiedTime: modifiedTime}).
+			Context(CTX).
+			Media(reader).
+			Do()
+
+		return err
+	}
+
+	_, err = fileService.
 		Create(&File{
 			Name:         filename,
-			ModifiedTime: time.Unix(int64(date_modified), 0).Format(time.RFC3339),
+			ModifiedTime: modifiedTime,
 			Parents:      []string{folder_id},
 		}).
 		Context(CTX).
-		Media(bytes.NewReader(data)).
+		Media(reader).
 		Do()
 
 	if err != nil {
@@ -147,13 +169,13 @@ func Upload(access_token, filename string, date_modified int64, data []byte) err
 }
 
 func Download(accessToken, filename string) ([]byte, error) {
-	fileService, err := GetFileService([]byte(accessToken))
+	fileService, err := getFileService([]byte(accessToken))
 
 	if err != nil {
 		return nil, err
 	}
 
-	home, err := HomeFolder(fileService)
+	home, err := homeFolder(fileService)
 
 	if err != nil {
 		return nil, err

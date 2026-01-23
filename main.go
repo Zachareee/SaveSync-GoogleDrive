@@ -109,12 +109,7 @@ func download(accessToken, filename CStr) (unsafe.Pointer, uint64, CStr) {
 }
 
 //export free_info
-func free_info(info C.struct_Info) {
-	free_string(info.name)
-	free_string(info.description)
-	free_string(info.author)
-	free_string(info.icon_url)
-}
+func free_info(CStr, CStr, CStr, CStr) {}
 
 //export free_string
 func free_string(str CStr) {
