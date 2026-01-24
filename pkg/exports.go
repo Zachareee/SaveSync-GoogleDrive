@@ -12,7 +12,7 @@ import (
 )
 
 type PluginInfo struct {
-	Name, Description, Author, Icon_url string
+	Name, Description, Author, IconUrl string
 }
 
 type FileDetails struct {
@@ -25,12 +25,12 @@ func Info() PluginInfo {
 		Name:        "Google Drive",
 		Description: "Google Drive plugin for SaveSync",
 		Author:      "Zachareee",
-		Icon_url:    "https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg",
+		IconUrl:     "https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg",
 	}
 }
 
-func Validate(credentials, redirect_uri string) (string, error) {
-	url := createAuthCodeURL(redirect_uri)
+func Validate(credentials, redirectUri string) (string, error) {
+	url := createAuthCodeURL(redirectUri)
 	if credentials == "" {
 		return url, errors.New("No credentials provided")
 	}
@@ -40,13 +40,13 @@ func Validate(credentials, redirect_uri string) (string, error) {
 	case err != nil:
 		return url, err
 	case !token.Valid():
-		return url, errors.New("Token is invalid, please reauthenticate")
+		return url, errors.New("Token expired, please reauthenticate")
 	}
 
 	return "", nil
 }
 
-func Extract_credentials(uri string) (string, error) {
+func ExtractCredentials(uri string) (string, error) {
 	s, err := url.Parse(uri)
 	if err != nil {
 		return "", err
@@ -72,7 +72,7 @@ func Extract_credentials(uri string) (string, error) {
 	return string(data), nil
 }
 
-func Read_cloud(accessToken string) ([]FileDetails, error) {
+func ReadCloud(accessToken string) ([]FileDetails, error) {
 	fileService, err := getFileService([]byte(accessToken))
 
 	if err != nil {
@@ -116,14 +116,18 @@ func Read_cloud(accessToken string) ([]FileDetails, error) {
 	return fileDetailsSlice, nil
 }
 
-func Upload(access_token, filename string, date_modified int64, data []byte) error {
-	fileService, err := getFileService([]byte(access_token))
+func filenameTemplate(filename, folderId string) string {
+	return fmt.Sprintf("name = '%s' and '%s' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false", filename, folderId)
+}
+
+func Upload(accessToken, filename string, dateModified int64, data []byte) error {
+	fileService, err := getFileService([]byte(accessToken))
 
 	if err != nil {
 		return err
 	}
 
-	folder_id, err := homeFolder(fileService)
+	folderId, err := homeFolder(fileService)
 
 	if err != nil {
 		return err
@@ -132,18 +136,19 @@ func Upload(access_token, filename string, date_modified int64, data []byte) err
 	files, err := fileService.List().
 		Context(CTX).
 		Fields("files(id, name)").
-		Q(fmt.Sprintf("name = '%s' and '%s' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false", filename, folder_id)).
+		Q(filenameTemplate(filename, folderId)).
 		Do()
 
 	if err != nil {
 		return err
 	}
 
-	var modifiedTime = time.Unix(int64(date_modified), 0).Format(time.RFC3339)
+	var modifiedTime = time.Unix(int64(dateModified), 0).Format(time.RFC3339)
 	var reader = bytes.NewReader(data)
 
 	if len(files.Files) != 0 {
-		_, err := fileService.Update(files.Files[0].Id, &File{ModifiedTime: modifiedTime}).
+		_, err := fileService.
+			Update(files.Files[0].Id, &File{ModifiedTime: modifiedTime}).
 			Context(CTX).
 			Media(reader).
 			Do()
@@ -155,7 +160,7 @@ func Upload(access_token, filename string, date_modified int64, data []byte) err
 		Create(&File{
 			Name:         filename,
 			ModifiedTime: modifiedTime,
-			Parents:      []string{folder_id},
+			Parents:      []string{folderId},
 		}).
 		Context(CTX).
 		Media(reader).
@@ -184,7 +189,7 @@ func Download(accessToken, filename string) ([]byte, error) {
 	files, err := fileService.List().
 		Context(CTX).
 		Fields("files(id)").
-		Q(fmt.Sprintf("name = '%s' and '%s' in parents and trashed = false", filename, home)).
+		Q(filenameTemplate(filename, home)).
 		Do()
 
 	if err != nil {

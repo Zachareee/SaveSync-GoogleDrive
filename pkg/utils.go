@@ -48,14 +48,14 @@ func getToken(data []byte) (oauth2.Token, error) {
 	return authtoken, err
 }
 
-func createAuthCodeURL(redirect_uri string) string {
+func createAuthCodeURL(redirectUri string) string {
 	config := getConfig()
-	config.RedirectURL = redirect_uri
+	config.RedirectURL = redirectUri
 	return config.AuthCodeURL(rand.Text(), oauth2.AccessTypeOffline)
 }
 
-func getFileService(access_token []byte) (*drive.FilesService, error) {
-	srv, err := drive.NewService(CTX, option.WithHTTPClient(getClient(getConfig(), access_token)))
+func getFileService(accessToken []byte) (*drive.FilesService, error) {
+	srv, err := drive.NewService(CTX, option.WithHTTPClient(getClient(getConfig(), accessToken)))
 
 	if err != nil {
 		return nil, err

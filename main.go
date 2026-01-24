@@ -36,13 +36,13 @@ func info() C.struct_Info {
 		C.CString(plugin.Name),
 		C.CString(plugin.Description),
 		C.CString(plugin.Author),
-		C.CString(plugin.Icon_url),
+		C.CString(plugin.IconUrl),
 	}
 }
 
 //export validate
-func validate(credentials, redirect_uri CStr) (CStr, CStr) {
-	url, err := pkg.Validate(C.GoString(credentials), C.GoString(redirect_uri))
+func validate(credentials, redirectUri CStr) (CStr, CStr) {
+	url, err := pkg.Validate(C.GoString(credentials), C.GoString(redirectUri))
 	if err != nil {
 		return C.CString(url), C.CString(err.Error())
 	}
@@ -52,7 +52,7 @@ func validate(credentials, redirect_uri CStr) (CStr, CStr) {
 
 //export extract_credentials
 func extract_credentials(uri CStr) (CStr, CStr) {
-	credentials, err := pkg.Extract_credentials(C.GoString(uri))
+	credentials, err := pkg.ExtractCredentials(C.GoString(uri))
 
 	if err != nil {
 		return nil, C.CString(err.Error())
@@ -63,7 +63,7 @@ func extract_credentials(uri CStr) (CStr, CStr) {
 
 //export read_cloud
 func read_cloud(accessToken CStr) (*C.struct_FileDetails, uint64, CStr) {
-	details, err := pkg.Read_cloud(C.GoString(accessToken))
+	details, err := pkg.ReadCloud(C.GoString(accessToken))
 
 	if err != nil {
 		return nil, 0, C.CString(err.Error())
@@ -87,9 +87,9 @@ func read_cloud(accessToken CStr) (*C.struct_FileDetails, uint64, CStr) {
 }
 
 //export upload
-func upload(access_token, filename CStr, date_modified uint64, data CStr, data_length uint64) CStr {
-	byteslice := unsafe.Slice((*byte)(unsafe.Pointer(data)), data_length)
-	err := pkg.Upload(C.GoString(access_token), C.GoString(filename), int64(date_modified), byteslice)
+func upload(accessToken, filename CStr, dateModified uint64, data CStr, dataLength uint64) CStr {
+	byteslice := unsafe.Slice((*byte)(unsafe.Pointer(data)), dataLength)
+	err := pkg.Upload(C.GoString(accessToken), C.GoString(filename), int64(dateModified), byteslice)
 
 	if err != nil {
 		return C.CString(err.Error())
