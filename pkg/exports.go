@@ -116,10 +116,6 @@ func ReadCloud(accessToken string) ([]FileDetails, error) {
 	return fileDetailsSlice, nil
 }
 
-func filenameTemplate(filename, folderId string) string {
-	return fmt.Sprintf("name = '%s' and '%s' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false", filename, folderId)
-}
-
 func Upload(accessToken, filename string, dateModified int64, data []byte) error {
 	fileService, err := getFileService([]byte(accessToken))
 
@@ -135,7 +131,7 @@ func Upload(accessToken, filename string, dateModified int64, data []byte) error
 
 	files, err := fileService.List().
 		Context(CTX).
-		Fields("files(id, name)").
+		Fields("files(id)").
 		Q(filenameTemplate(filename, folderId)).
 		Do()
 
@@ -180,27 +176,11 @@ func Download(accessToken, filename string) ([]byte, error) {
 		return nil, err
 	}
 
-	home, err := homeFolder(fileService)
+	file, err := findFile(fileService, filename)
 
 	if err != nil {
 		return nil, err
 	}
-
-	files, err := fileService.List().
-		Context(CTX).
-		Fields("files(id)").
-		Q(filenameTemplate(filename, home)).
-		Do()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if len(files.Files) == 0 {
-		return nil, fmt.Errorf("File not found: %s", filename)
-	}
-
-	file := files.Files[0].Id
 
 	resp, err := fileService.Get(file).Download()
 
@@ -217,4 +197,18 @@ func Download(accessToken, filename string) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+func Remove(accessToken, filename string) error {
+	fileService, err := getFileService([]byte(accessToken))
+
+	id, err := findFile(fileService, filename)
+
+	if err != nil {
+		return err
+	}
+
+	return fileService.Delete(id).
+		Context(CTX).
+		Do()
 }

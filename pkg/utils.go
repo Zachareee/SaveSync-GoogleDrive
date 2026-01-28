@@ -90,3 +90,31 @@ func homeFolder(fileService *drive.FilesService) (string, error) {
 
 	return folder.Id, nil
 }
+
+func filenameTemplate(filename, folderId string) string {
+	return fmt.Sprintf("name = '%s' and '%s' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false", filename, folderId)
+}
+
+func findFile(fileService *drive.FilesService, filename string) (string, error) {
+	home, err := homeFolder(fileService)
+
+	if err != nil {
+		return "", err
+	}
+
+	files, err := fileService.List().
+		Context(CTX).
+		Fields("files(id)").
+		Q(filenameTemplate(filename, home)).
+		Do()
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(files.Files) == 0 {
+		return "", fmt.Errorf("File not found: %s", filename)
+	}
+
+	return files.Files[0].Id, nil
+}

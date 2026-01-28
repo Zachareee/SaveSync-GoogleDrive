@@ -108,6 +108,16 @@ func download(accessToken, filename CStr) (unsafe.Pointer, uint64, CStr) {
 	return C.CBytes(data), uint64(len(data)), nil
 }
 
+//export remove
+func remove(accessToken, filename CStr) CStr {
+	err := pkg.Remove(C.GoString(accessToken), C.GoString(filename))
+
+	if err != nil {
+		return C.CString(err.Error())
+	}
+	return nil
+}
+
 //export free_info
 func free_info(CStr, CStr, CStr, CStr) {}
 
