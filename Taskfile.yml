@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+tasks:
+  install:
+    desc: Install the dependencies for this project
+    cmds:
+      - go mod tidy
+  clean:
+    desc: Clean the output files
+    cmds:
+      - rm gdrive.*
+  default:
+    desc: Build the binary
+    cmds:
+      - go build -buildmode c-shared -o gdrive.dll
