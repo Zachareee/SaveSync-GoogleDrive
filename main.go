@@ -18,8 +18,10 @@ struct Info {
 };
 
 struct FileDetails {
+	char *tag;
 	char *filename;
 	unsigned long long dateModified;
+	char *data;
 };
 */
 import "C"
@@ -75,8 +77,10 @@ func read_cloud(accessToken CStr) (*C.struct_FileDetails, uint64, CStr) {
 
 	for i, f := range details {
 		fileDetailsSlice[i] = C.struct_FileDetails{
+			tag:          C.CString(f.Tag),
 			filename:     C.CString(f.Filename),
 			dateModified: C.ulonglong(f.DateModified),
+			data:         nil,
 		}
 	}
 
@@ -87,9 +91,9 @@ func read_cloud(accessToken CStr) (*C.struct_FileDetails, uint64, CStr) {
 }
 
 //export upload
-func upload(accessToken, filename CStr, dateModified uint64, data CStr, dataLength uint64) CStr {
+func upload(accessToken, tag, filename CStr, dateModified uint64, data CStr, dataLength uint64) CStr {
 	byteslice := unsafe.Slice((*byte)(unsafe.Pointer(data)), dataLength)
-	err := pkg.Upload(C.GoString(accessToken), C.GoString(filename), int64(dateModified), byteslice)
+	err := pkg.Upload(C.GoString(accessToken), C.GoString(tag), C.GoString(filename), int64(dateModified), byteslice)
 
 	if err != nil {
 		return C.CString(err.Error())
@@ -99,8 +103,8 @@ func upload(accessToken, filename CStr, dateModified uint64, data CStr, dataLeng
 }
 
 //export download
-func download(accessToken, filename CStr) (unsafe.Pointer, uint64, CStr) {
-	data, err := pkg.Download(C.GoString(accessToken), C.GoString(filename))
+func download(accessToken, tag, filename CStr) (unsafe.Pointer, uint64, CStr) {
+	data, err := pkg.Download(C.GoString(accessToken), C.GoString(tag), C.GoString(filename))
 
 	if err != nil {
 		return nil, 0, C.CString(err.Error())
@@ -109,8 +113,8 @@ func download(accessToken, filename CStr) (unsafe.Pointer, uint64, CStr) {
 }
 
 //export remove
-func remove(accessToken, filename CStr) CStr {
-	err := pkg.Remove(C.GoString(accessToken), C.GoString(filename))
+func remove(accessToken, tag, filename CStr) CStr {
+	err := pkg.Remove(C.GoString(accessToken), C.GoString(tag), C.GoString(filename))
 
 	if err != nil {
 		return C.CString(err.Error())

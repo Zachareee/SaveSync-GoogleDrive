@@ -16,8 +16,10 @@ type PluginInfo struct {
 }
 
 type FileDetails struct {
+	Tag          string
 	Filename     string
 	DateModified uint64
+	Data         string
 }
 
 func Info() PluginInfo {
@@ -85,10 +87,10 @@ func ReadCloud(accessToken string) ([]FileDetails, error) {
 		return nil, err
 	}
 
-	files, err := fileService.
+	tagFolders, err := fileService.
 		List().
 		Context(CTX).
-		Fields("files(name, modifiedTime)").
+		Fields("files(id, name)").
 		Q(fmt.Sprintf("'%s' in parents and trashed = false", homeFolderId)).
 		Do()
 
@@ -96,34 +98,45 @@ func ReadCloud(accessToken string) ([]FileDetails, error) {
 		return nil, err
 	}
 
-	n := uint64(len(files.Files))
+	fileDetailsSlice := []FileDetails{}
 
-	fileDetailsSlice := make([]FileDetails, n)
-
-	for i, f := range files.Files {
-		modifiedDate, err := time.Parse(time.RFC3339, f.ModifiedTime)
+	for _, folder := range tagFolders.Files {
+		nestedFiles, err := fileService.
+			List().
+			Context(CTX).
+			Fields("files(name, modifiedTime)").
+			Q(fmt.Sprintf("'%s' in parents and trashed = false", folder.Id)).
+			Do()
 
 		if err != nil {
 			return nil, err
 		}
 
-		fileDetailsSlice[i] = FileDetails{
-			Filename:     f.Name,
-			DateModified: uint64(modifiedDate.Unix()),
+		for _, f := range nestedFiles.Files {
+			modifiedDate, err := time.Parse(time.RFC3339, f.ModifiedTime)
+			if err != nil {
+				return nil, err
+			}
+
+			fileDetailsSlice = append(fileDetailsSlice, FileDetails{
+				Tag:          folder.Name,
+				Filename:     f.Name,
+				DateModified: uint64(modifiedDate.Unix()),
+			})
 		}
 	}
 
 	return fileDetailsSlice, nil
 }
 
-func Upload(accessToken, filename string, dateModified int64, data []byte) error {
+func Upload(accessToken, tag, filename string, dateModified int64, data []byte) error {
 	fileService, err := getFileService([]byte(accessToken))
 
 	if err != nil {
 		return err
 	}
 
-	folderId, err := homeFolder(fileService)
+	tagFolderId, err := findFolder(fileService, tag)
 
 	if err != nil {
 		return err
@@ -132,7 +145,7 @@ func Upload(accessToken, filename string, dateModified int64, data []byte) error
 	files, err := fileService.List().
 		Context(CTX).
 		Fields("files(id)").
-		Q(filenameTemplate(filename, folderId)).
+		Q(filenameTemplate(filename, tagFolderId)).
 		Do()
 
 	if err != nil {
@@ -156,27 +169,23 @@ func Upload(accessToken, filename string, dateModified int64, data []byte) error
 		Create(&File{
 			Name:         filename,
 			ModifiedTime: modifiedTime,
-			Parents:      []string{folderId},
+			Parents:      []string{tagFolderId},
 		}).
 		Context(CTX).
 		Media(reader).
 		Do()
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
-func Download(accessToken, filename string) ([]byte, error) {
+func Download(accessToken, tag, filename string) ([]byte, error) {
 	fileService, err := getFileService([]byte(accessToken))
 
 	if err != nil {
 		return nil, err
 	}
 
-	file, err := findFile(fileService, filename)
+	file, err := findFile(fileService, tag, filename)
 
 	if err != nil {
 		return nil, err
@@ -190,19 +199,13 @@ func Download(accessToken, filename string) ([]byte, error) {
 
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
+	return io.ReadAll(resp.Body)
 }
 
-func Remove(accessToken, filename string) error {
+func Remove(accessToken, tag, filename string) error {
 	fileService, err := getFileService([]byte(accessToken))
 
-	id, err := findFile(fileService, filename)
+	id, err := findFile(fileService, tag, filename)
 
 	if err != nil {
 		return err
