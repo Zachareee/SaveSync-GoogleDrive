@@ -33,14 +33,20 @@ func getConfig() *oauth2.Config {
 }
 
 func getClient(config *oauth2.Config, data []byte) *http.Client {
-	var authtoken oauth2.Token
-	err := json.Unmarshal(data, &authtoken)
+	token, err := getToken(data)
 
 	if err != nil {
 		log.Fatalf("Unable to parse token: %v", err)
 	}
 
-	return config.Client(CTX, &authtoken)
+	return config.Client(CTX, &token)
+}
+
+func getToken(data []byte) (oauth2.Token, error) {
+	var authtoken oauth2.Token
+	err := json.Unmarshal(data, &authtoken)
+
+	return authtoken, err
 }
 
 func createAuthCodeURL(redirectUri string) string {
