@@ -93,7 +93,7 @@ func homeFolder(fileService *drive.FilesService) (string, error) {
 }
 
 func folderTemplate(foldername, folderId string) string {
-	return fmt.Sprintf("name = '%s' and '%s' in parents and mimeType == '%s' and trashed = false", foldername, folderId, googleFolderMime)
+	return fmt.Sprintf("name = '%s' and '%s' in parents and mimeType = '%s' and trashed = false", foldername, folderId, googleFolderMime)
 }
 
 func filenameTemplate(filename, folderId string) string {
