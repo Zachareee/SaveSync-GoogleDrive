@@ -42,14 +42,22 @@ func info() C.struct_Info {
 	}
 }
 
-//export validate
-func validate(credentials, redirectUri CStr) (CStr, CStr) {
-	url, err := pkg.Validate(C.GoString(credentials), C.GoString(redirectUri))
+//export authenticate
+func authenticate(credentials CStr) (CStr, CStr) {
+	newCreds, err := pkg.Authenticate(C.GoString(credentials))
 	if err != nil {
-		return C.CString(url), C.CString(err.Error())
+		return nil, C.CString(err.Error())
 	}
 
-	return nil, nil
+	if newCreds == "" {
+		return nil, nil
+	}
+	return C.CString(newCreds), nil
+}
+
+//export auth_url
+func auth_url(redirectUri CStr) CStr {
+	return C.CString(pkg.AuthUrl(C.GoString(redirectUri)))
 }
 
 //export extract_credentials

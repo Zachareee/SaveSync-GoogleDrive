@@ -31,21 +31,31 @@ func Info() PluginInfo {
 	}
 }
 
-func Validate(credentials, redirectUri string) (string, error) {
-	url := createAuthCodeURL(redirectUri)
+func Authenticate(credentials string) (string, error) {
 	if credentials == "" {
-		return url, errors.New("No credentials provided")
+		return "", errors.New("No credentials provided")
 	}
 
 	token, err := getToken([]byte(credentials))
+	newToken, err := getConfig().TokenSource(CTX, &token).Token()
 	switch {
 	case err != nil:
-		return url, err
+		return "", err
+
 	case !token.Valid():
-		return url, errors.New("Token expired, please reauthenticate")
+		data, err := json.Marshal(newToken)
+		if err != nil {
+			return "", err
+		}
+
+		return string(data), nil
 	}
 
 	return "", nil
+}
+
+func AuthUrl(redirectUri string) string {
+	return createAuthCodeURL(redirectUri)
 }
 
 func ExtractCredentials(uri string) (string, error) {
