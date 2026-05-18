@@ -32,14 +32,14 @@ func getConfig() *oauth2.Config {
 	return config
 }
 
-func getClient(config *oauth2.Config, data []byte) *http.Client {
+func getClient(data []byte) *http.Client {
 	token, err := getToken(data)
 
 	if err != nil {
 		log.Fatalf("Unable to parse token: %v", err)
 	}
 
-	return config.Client(CTX, &token)
+	return getConfig().Client(CTX, &token)
 }
 
 func getToken(data []byte) (oauth2.Token, error) {
@@ -56,7 +56,7 @@ func createAuthCodeURL(redirectUri string) string {
 }
 
 func getFileService(accessToken []byte) (*drive.FilesService, error) {
-	srv, err := drive.NewService(CTX, option.WithHTTPClient(getClient(getConfig(), accessToken)))
+	srv, err := drive.NewService(CTX, option.WithHTTPClient(getClient(accessToken)))
 
 	if err != nil {
 		return nil, err
