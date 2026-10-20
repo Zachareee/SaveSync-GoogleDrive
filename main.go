@@ -22,6 +22,7 @@ struct FileDetails {
 	char *filename;
 	unsigned long long dateModified;
 	char *data;
+	unsigned long long length;
 };
 */
 import "C"
@@ -89,6 +90,7 @@ func read_cloud(accessToken CStr) (*C.struct_FileDetails, uint64, CStr) {
 			filename:     C.CString(f.Filename),
 			dateModified: C.ulonglong(f.DateModified),
 			data:         nil,
+			length:       0,
 		}
 	}
 
